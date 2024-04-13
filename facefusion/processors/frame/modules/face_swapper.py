@@ -11,14 +11,17 @@ import facefusion.globals
 import facefusion.processors.frame.core as frame_processors
 from facefusion import config, process_manager, logger, wording
 from facefusion.execution import apply_execution_provider_options
-from facefusion.face_analyser import get_one_face, get_average_face, get_many_faces, find_similar_faces, clear_face_analyser
-from facefusion.face_masker import create_static_box_mask, create_occlusion_mask, create_region_mask, clear_face_occluder, clear_face_parser
+from facefusion.face_analyser import get_one_face, get_average_face, get_many_faces, find_similar_faces, \
+	clear_face_analyser
+from facefusion.face_masker import create_static_box_mask, create_occlusion_mask, create_region_mask, \
+	clear_face_occluder, clear_face_parser
 from facefusion.face_helper import warp_face_by_face_landmark_5, paste_back
 from facefusion.face_store import get_reference_faces
 from facefusion.common_helper import extract_major_version
 from facefusion.content_analyser import clear_content_analyser
 from facefusion.normalizer import normalize_output_path
-from facefusion.typing import Face, Embedding, VisionFrame, UpdateProcess, ProcessMode, ModelSet, OptionsWithModel, QueuePayload
+from facefusion.typing import Face, Embedding, VisionFrame, UpdateProcess, ProcessMode, ModelSet, OptionsWithModel, \
+	QueuePayload
 from facefusion.filesystem import is_file, is_image, has_image, is_video, filter_image_paths, resolve_relative_path
 from facefusion.download import conditional_download, is_download_done
 from facefusion.vision import read_image, read_static_image, read_static_images, write_image
@@ -28,72 +31,72 @@ from facefusion.processors.frame import choices as frame_processors_choices
 
 FRAME_PROCESSOR = None
 MODEL_MATRIX = None
-THREAD_LOCK : threading.Lock = threading.Lock()
+THREAD_LOCK: threading.Lock = threading.Lock()
 NAME = __name__.upper()
-MODELS : ModelSet =\
-{
-	'blendswap_256':
+MODELS: ModelSet = \
 	{
-		'type': 'blendswap',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/blendswap_256.onnx',
-		'path': resolve_relative_path('../.assets/models/blendswap_256.onnx'),
-		'template': 'ffhq_512',
-		'size': (256, 256),
-		'mean': [ 0.0, 0.0, 0.0 ],
-		'standard_deviation': [ 1.0, 1.0, 1.0 ]
-	},
-	'inswapper_128':
-	{
-		'type': 'inswapper',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/inswapper_128.onnx',
-		'path': resolve_relative_path('../.assets/models/inswapper_128.onnx'),
-		'template': 'arcface_128_v2',
-		'size': (128, 128),
-		'mean': [ 0.0, 0.0, 0.0 ],
-		'standard_deviation': [ 1.0, 1.0, 1.0 ]
-	},
-	'inswapper_128_fp16':
-	{
-		'type': 'inswapper',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/inswapper_128_fp16.onnx',
-		'path': resolve_relative_path('../.assets/models/inswapper_128_fp16.onnx'),
-		'template': 'arcface_128_v2',
-		'size': (128, 128),
-		'mean': [ 0.0, 0.0, 0.0 ],
-		'standard_deviation': [ 1.0, 1.0, 1.0 ]
-	},
-	'simswap_256':
-	{
-		'type': 'simswap',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/simswap_256.onnx',
-		'path': resolve_relative_path('../.assets/models/simswap_256.onnx'),
-		'template': 'arcface_112_v1',
-		'size': (256, 256),
-		'mean': [ 0.485, 0.456, 0.406 ],
-		'standard_deviation': [ 0.229, 0.224, 0.225 ]
-	},
-	'simswap_512_unofficial':
-	{
-		'type': 'simswap',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/simswap_512_unofficial.onnx',
-		'path': resolve_relative_path('../.assets/models/simswap_512_unofficial.onnx'),
-		'template': 'arcface_112_v1',
-		'size': (512, 512),
-		'mean': [ 0.0, 0.0, 0.0 ],
-		'standard_deviation': [ 1.0, 1.0, 1.0 ]
-	},
-	'uniface_256':
-	{
-		'type': 'uniface',
-		'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/uniface_256.onnx',
-		'path': resolve_relative_path('../.assets/models/uniface_256.onnx'),
-		'template': 'ffhq_512',
-		'size': (256, 256),
-		'mean': [ 0.0, 0.0, 0.0 ],
-		'standard_deviation': [ 1.0, 1.0, 1.0 ]
+		'blendswap_256':
+			{
+				'type': 'blendswap',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/blendswap_256.onnx',
+				'path': resolve_relative_path('../.assets/models/blendswap_256.onnx'),
+				'template': 'ffhq_512',
+				'size': (256, 256),
+				'mean': [0.0, 0.0, 0.0],
+				'standard_deviation': [1.0, 1.0, 1.0]
+			},
+		'inswapper_128':
+			{
+				'type': 'inswapper',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/inswapper_128.onnx',
+				'path': resolve_relative_path('../.assets/models/inswapper_128.onnx'),
+				'template': 'arcface_128_v2',
+				'size': (128, 128),
+				'mean': [0.0, 0.0, 0.0],
+				'standard_deviation': [1.0, 1.0, 1.0]
+			},
+		'inswapper_128_fp16':
+			{
+				'type': 'inswapper',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/inswapper_128_fp16.onnx',
+				'path': resolve_relative_path('../.assets/models/inswapper_128_fp16.onnx'),
+				'template': 'arcface_128_v2',
+				'size': (128, 128),
+				'mean': [0.0, 0.0, 0.0],
+				'standard_deviation': [1.0, 1.0, 1.0]
+			},
+		'simswap_256':
+			{
+				'type': 'simswap',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/simswap_256.onnx',
+				'path': resolve_relative_path('../.assets/models/simswap_256.onnx'),
+				'template': 'arcface_112_v1',
+				'size': (256, 256),
+				'mean': [0.485, 0.456, 0.406],
+				'standard_deviation': [0.229, 0.224, 0.225]
+			},
+		'simswap_512_unofficial':
+			{
+				'type': 'simswap',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/simswap_512_unofficial.onnx',
+				'path': resolve_relative_path('../.assets/models/simswap_512_unofficial.onnx'),
+				'template': 'arcface_112_v1',
+				'size': (512, 512),
+				'mean': [0.0, 0.0, 0.0],
+				'standard_deviation': [1.0, 1.0, 1.0]
+			},
+		'uniface_256':
+			{
+				'type': 'uniface',
+				'url': 'https://github.com/facefusion/facefusion-assets/releases/download/models/uniface_256.onnx',
+				'path': resolve_relative_path('../.assets/models/uniface_256.onnx'),
+				'template': 'ffhq_512',
+				'size': (256, 256),
+				'mean': [0.0, 0.0, 0.0],
+				'standard_deviation': [1.0, 1.0, 1.0]
+			}
 	}
-}
-OPTIONS : Optional[OptionsWithModel] = None
+OPTIONS: Optional[OptionsWithModel] = None
 
 
 def get_frame_processor() -> Any:
@@ -104,7 +107,8 @@ def get_frame_processor() -> Any:
 			sleep(0.5)
 		if FRAME_PROCESSOR is None:
 			model_path = get_options('model').get('path')
-			FRAME_PROCESSOR = onnxruntime.InferenceSession(model_path, providers = apply_execution_provider_options(facefusion.globals.execution_providers))
+			FRAME_PROCESSOR = onnxruntime.InferenceSession(model_path, providers=apply_execution_provider_options(
+				facefusion.globals.execution_providers))
 	return FRAME_PROCESSOR
 
 
@@ -133,33 +137,36 @@ def clear_model_matrix() -> None:
 	MODEL_MATRIX = None
 
 
-def get_options(key : Literal['model']) -> Any:
+def get_options(key: Literal['model']) -> Any:
 	global OPTIONS
 
 	if OPTIONS is None:
-		OPTIONS =\
-		{
-			'model': MODELS[frame_processors_globals.face_swapper_model]
-		}
+		OPTIONS = \
+			{
+				'model': MODELS[frame_processors_globals.face_swapper_model]
+			}
 	return OPTIONS.get(key)
 
 
-def set_options(key : Literal['model'], value : Any) -> None:
+def set_options(key: Literal['model'], value: Any) -> None:
 	global OPTIONS
 
 	OPTIONS[key] = value
 
 
-def register_args(program : ArgumentParser) -> None:
+def register_args(program: ArgumentParser) -> None:
 	onnxruntime_version = extract_major_version(onnxruntime.__version__)
 	if onnxruntime_version > (1, 16):
 		face_swapper_model_fallback = 'inswapper_128'
 	else:
 		face_swapper_model_fallback = 'inswapper_128_fp16'
-	program.add_argument('--face-swapper-model', help = wording.get('help.face_swapper_model'), default = config.get_str_value('frame_processors.face_swapper_model', face_swapper_model_fallback), choices = frame_processors_choices.face_swapper_models)
+	program.add_argument('--face-swapper-model', help=wording.get('help.face_swapper_model'),
+						 default=config.get_str_value('frame_processors.face_swapper_model',
+													  face_swapper_model_fallback),
+						 choices=frame_processors_choices.face_swapper_models)
 
 
-def apply_args(program : ArgumentParser) -> None:
+def apply_args(program: ArgumentParser) -> None:
 	args = program.parse_args()
 	frame_processors_globals.face_swapper_model = args.face_swapper_model
 	if args.face_swapper_model == 'blendswap_256':
@@ -177,7 +184,7 @@ def pre_check() -> bool:
 		download_directory_path = resolve_relative_path('../.assets/models')
 		model_url = get_options('model').get('url')
 		process_manager.check()
-		conditional_download(download_directory_path, [ model_url ])
+		conditional_download(download_directory_path, [model_url])
 		process_manager.end()
 	return True
 
@@ -194,7 +201,7 @@ def post_check() -> bool:
 	return True
 
 
-def pre_process(mode : ProcessMode) -> bool:
+def pre_process(mode: ProcessMode) -> bool:
 	if not has_image(facefusion.globals.source_paths):
 		logger.error(wording.get('select_image_source') + wording.get('exclamation_mark'), NAME)
 		return False
@@ -204,7 +211,8 @@ def pre_process(mode : ProcessMode) -> bool:
 		if not get_one_face(source_frame):
 			logger.error(wording.get('no_source_face_detected') + wording.get('exclamation_mark'), NAME)
 			return False
-	if mode in [ 'output', 'preview' ] and not is_image(facefusion.globals.target_path) and not is_video(facefusion.globals.target_path):
+	if mode in ['output', 'preview'] and not is_image(facefusion.globals.target_path) and not is_video(
+		facefusion.globals.target_path):
 		logger.error(wording.get('select_image_or_video_target') + wording.get('exclamation_mark'), NAME)
 		return False
 	if mode == 'output' and not normalize_output_path(facefusion.globals.target_path, facefusion.globals.output_path):
@@ -225,14 +233,17 @@ def post_process() -> None:
 		clear_face_parser()
 
 
-def swap_face(source_face : Face, target_face : Face, temp_vision_frame : VisionFrame) -> VisionFrame:
+def swap_face(source_face: Face, target_face: Face, temp_vision_frame: VisionFrame) -> VisionFrame:
 	model_template = get_options('model').get('template')
 	model_size = get_options('model').get('size')
-	crop_vision_frame, affine_matrix = warp_face_by_face_landmark_5(temp_vision_frame, target_face.landmarks.get('5/68'), model_template, model_size)
+	crop_vision_frame, affine_matrix = warp_face_by_face_landmark_5(temp_vision_frame,
+																	target_face.landmarks.get('5/68'), model_template,
+																	model_size)
 	crop_mask_list = []
 
 	if 'box' in facefusion.globals.face_mask_types:
-		box_mask = create_static_box_mask(crop_vision_frame.shape[:2][::-1], facefusion.globals.face_mask_blur, facefusion.globals.face_mask_padding)
+		box_mask = create_static_box_mask(crop_vision_frame.shape[:2][::-1], facefusion.globals.face_mask_blur,
+										  facefusion.globals.face_mask_padding)
 		crop_mask_list.append(box_mask)
 	if 'occlusion' in facefusion.globals.face_mask_types:
 		occlusion_mask = create_occlusion_mask(crop_vision_frame)
@@ -248,7 +259,7 @@ def swap_face(source_face : Face, target_face : Face, temp_vision_frame : Vision
 	return temp_vision_frame
 
 
-def apply_swap(source_face : Face, crop_vision_frame : VisionFrame) -> VisionFrame:
+def apply_swap(source_face: Face, crop_vision_frame: VisionFrame) -> VisionFrame:
 	frame_processor = get_frame_processor()
 	model_type = get_options('model').get('type')
 	frame_processor_inputs = {}
@@ -265,20 +276,22 @@ def apply_swap(source_face : Face, crop_vision_frame : VisionFrame) -> VisionFra
 	return crop_vision_frame
 
 
-def prepare_source_frame(source_face : Face) -> VisionFrame:
+def prepare_source_frame(source_face: Face) -> VisionFrame:
 	model_type = get_options('model').get('type')
 	source_vision_frame = read_static_image(facefusion.globals.source_paths[0])
 	if model_type == 'blendswap':
-		source_vision_frame, _ = warp_face_by_face_landmark_5(source_vision_frame, source_face.landmarks.get('5/68'), 'arcface_112_v2', (112, 112))
+		source_vision_frame, _ = warp_face_by_face_landmark_5(source_vision_frame, source_face.landmarks.get('5/68'),
+															  'arcface_112_v2', (112, 112))
 	if model_type == 'uniface':
-		source_vision_frame, _ = warp_face_by_face_landmark_5(source_vision_frame, source_face.landmarks.get('5/68'), 'ffhq_512', (256, 256))
+		source_vision_frame, _ = warp_face_by_face_landmark_5(source_vision_frame, source_face.landmarks.get('5/68'),
+															  'ffhq_512', (256, 256))
 	source_vision_frame = source_vision_frame[:, :, ::-1] / 255.0
 	source_vision_frame = source_vision_frame.transpose(2, 0, 1)
-	source_vision_frame = numpy.expand_dims(source_vision_frame, axis = 0).astype(numpy.float32)
+	source_vision_frame = numpy.expand_dims(source_vision_frame, axis=0).astype(numpy.float32)
 	return source_vision_frame
 
 
-def prepare_source_embedding(source_face : Face) -> Embedding:
+def prepare_source_embedding(source_face: Face) -> Embedding:
 	model_type = get_options('model').get('type')
 	if model_type == 'inswapper':
 		model_matrix = get_model_matrix()
@@ -289,28 +302,28 @@ def prepare_source_embedding(source_face : Face) -> Embedding:
 	return source_embedding
 
 
-def prepare_crop_frame(crop_vision_frame : VisionFrame) -> VisionFrame:
+def prepare_crop_frame(crop_vision_frame: VisionFrame) -> VisionFrame:
 	model_mean = get_options('model').get('mean')
 	model_standard_deviation = get_options('model').get('standard_deviation')
 	crop_vision_frame = crop_vision_frame[:, :, ::-1] / 255.0
 	crop_vision_frame = (crop_vision_frame - model_mean) / model_standard_deviation
 	crop_vision_frame = crop_vision_frame.transpose(2, 0, 1)
-	crop_vision_frame = numpy.expand_dims(crop_vision_frame, axis = 0).astype(numpy.float32)
+	crop_vision_frame = numpy.expand_dims(crop_vision_frame, axis=0).astype(numpy.float32)
 	return crop_vision_frame
 
 
-def normalize_crop_frame(crop_vision_frame : VisionFrame) -> VisionFrame:
+def normalize_crop_frame(crop_vision_frame: VisionFrame) -> VisionFrame:
 	crop_vision_frame = crop_vision_frame.transpose(1, 2, 0)
 	crop_vision_frame = (crop_vision_frame * 255.0).round()
 	crop_vision_frame = crop_vision_frame[:, :, ::-1]
 	return crop_vision_frame
 
 
-def get_reference_frame(source_face : Face, target_face : Face, temp_vision_frame : VisionFrame) -> VisionFrame:
+def get_reference_frame(source_face: Face, target_face: Face, temp_vision_frame: VisionFrame) -> VisionFrame:
 	return swap_face(source_face, target_face, temp_vision_frame)
 
 
-def process_frame(inputs : FaceSwapperInputs) -> VisionFrame:
+def process_frame(inputs: FaceSwapperInputs) -> VisionFrame:
 	reference_faces = inputs.get('reference_faces')
 	source_face = inputs.get('source_face')
 	target_vision_frame = inputs.get('target_vision_frame')
@@ -325,14 +338,15 @@ def process_frame(inputs : FaceSwapperInputs) -> VisionFrame:
 		if target_face:
 			target_vision_frame = swap_face(source_face, target_face, target_vision_frame)
 	if facefusion.globals.face_selector_mode == 'reference':
-		similar_faces = find_similar_faces(reference_faces, target_vision_frame, facefusion.globals.reference_face_distance)
+		similar_faces = find_similar_faces(reference_faces, target_vision_frame,
+										   facefusion.globals.reference_face_distance)
 		if similar_faces:
 			for similar_face in similar_faces:
 				target_vision_frame = swap_face(source_face, similar_face, target_vision_frame)
 	return target_vision_frame
 
 
-def process_frames(source_paths : List[str], queue_payloads : List[QueuePayload], update_progress : UpdateProcess) -> None:
+def process_frames(source_paths: List[str], queue_payloads: List[QueuePayload], update_progress: UpdateProcess) -> None:
 	reference_faces = get_reference_faces() if 'reference' in facefusion.globals.face_selector_mode else None
 	source_frames = read_static_images(source_paths)
 	source_face = get_average_face(source_frames)
@@ -341,28 +355,45 @@ def process_frames(source_paths : List[str], queue_payloads : List[QueuePayload]
 		target_vision_path = queue_payload['frame_path']
 		target_vision_frame = read_image(target_vision_path)
 		output_vision_frame = process_frame(
-		{
-			'reference_faces': reference_faces,
-			'source_face': source_face,
-			'target_vision_frame': target_vision_frame
-		})
+			{
+				'reference_faces': reference_faces,
+				'source_face': source_face,
+				'target_vision_frame': target_vision_frame
+			})
 		write_image(target_vision_path, output_vision_frame)
 		update_progress()
 
 
-def process_image(source_paths : List[str], target_path : str, output_path : str) -> None:
+def process_image(source_paths: List[str], target_path: str, output_path: str) -> None:
 	reference_faces = get_reference_faces() if 'reference' in facefusion.globals.face_selector_mode else None
 	source_frames = read_static_images(source_paths)
 	source_face = get_average_face(source_frames)
 	target_vision_frame = read_static_image(target_path)
 	output_vision_frame = process_frame(
-	{
-		'reference_faces': reference_faces,
-		'source_face': source_face,
-		'target_vision_frame': target_vision_frame
-	})
+		{
+			'reference_faces': reference_faces,
+			'source_face': source_face,
+			'target_vision_frame': target_vision_frame
+		})
 	write_image(output_path, output_vision_frame)
 
 
-def process_video(source_paths : List[str], temp_frame_paths : List[str]) -> None:
+def process_image_object(source_frames: List[VisionFrame], target_vision_frame: VisionFrame) -> VisionFrame:
+	reference_faces = get_reference_faces() if 'reference' in facefusion.globals.face_selector_mode else None
+	# source_frames = read_static_images(source_paths)
+	source_face = get_average_face(source_frames)
+	# target_vision_frame = read_static_image(target_path)
+	output_vision_frame = process_frame(
+		{
+			'reference_faces': reference_faces,
+			'source_face': source_face,
+			'target_vision_frame': target_vision_frame
+		})
+	return output_vision_frame
+
+
+# write_image(output_path, output_vision_frame)
+
+
+def process_video(source_paths: List[str], temp_frame_paths: List[str]) -> None:
 	frame_processors.multi_process_frames(source_paths, temp_frame_paths, process_frames)
