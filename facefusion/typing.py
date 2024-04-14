@@ -56,7 +56,7 @@ QueuePayload = TypedDict('QueuePayload',
 	'frame_path' : str
 })
 UpdateProcess = Callable[[], None]
-ProcessFrames = Callable[[List[str], List[QueuePayload], UpdateProcess], None]
+ProcessFrames = Callable[[List[str], List[QueuePayload], UpdateProcess, dict], None]
 
 WarpTemplate = Literal['arcface_112_v1', 'arcface_112_v2', 'arcface_128_v2', 'ffhq_512']
 WarpTemplateSet = Dict[WarpTemplate, numpy.ndarray[Any, Any]]

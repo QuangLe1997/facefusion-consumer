@@ -7,21 +7,21 @@ from facefusion.typing import FaceSet
 from facefusion import logger
 
 
-def create_statistics(static_faces : FaceSet) -> Dict[str, Any]:
+def create_statistics(static_faces: FaceSet) -> Dict[str, Any]:
 	face_detector_score_list = []
 	face_landmarker_score_list = []
-	statistics =\
-	{
-		'min_face_detector_score': 0,
-		'min_face_landmarker_score': 0,
-		'max_face_detector_score': 0,
-		'max_face_landmarker_score': 0,
-		'average_face_detector_score': 0,
-		'average_face_landmarker_score': 0,
-		'total_face_landmark_5_fallbacks': 0,
-		'total_frames_with_faces': 0,
-		'total_faces': 0
-	}
+	statistics = \
+		{
+			'min_face_detector_score': 0,
+			'min_face_landmarker_score': 0,
+			'max_face_detector_score': 0,
+			'max_face_landmarker_score': 0,
+			'average_face_detector_score': 0,
+			'average_face_landmarker_score': 0,
+			'total_face_landmark_5_fallbacks': 0,
+			'total_frames_with_faces': 0,
+			'total_faces': 0
+		}
 
 	for faces in static_faces.values():
 		statistics['total_frames_with_faces'] = statistics.get('total_frames_with_faces') + 1
@@ -46,6 +46,9 @@ def create_statistics(static_faces : FaceSet) -> Dict[str, Any]:
 def conditional_log_statistics() -> None:
 	if facefusion.globals.log_level == 'debug':
 		statistics = create_statistics(FACE_STORE.get('static_faces'))
-
 		for name, value in statistics.items():
 			logger.debug(str(name) + ': ' + str(value), __name__.upper())
+
+
+def statistics() -> dict:
+	return create_statistics(FACE_STORE.get('static_faces'))

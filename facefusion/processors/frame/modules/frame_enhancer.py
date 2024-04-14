@@ -153,7 +153,7 @@ def post_process() -> None:
 		clear_content_analyser()
 
 
-def enhance_frame(temp_vision_frame : VisionFrame) -> VisionFrame:
+def enhance_frame(temp_vision_frame : VisionFrame, **kwargs) -> VisionFrame:
 	frame_processor = get_frame_processor()
 	size = get_options('model').get('size')
 	scale = get_options('model').get('scale')
@@ -191,37 +191,45 @@ def blend_frame(temp_vision_frame : VisionFrame, paste_vision_frame : VisionFram
 	return temp_vision_frame
 
 
-def get_reference_frame(source_face : Face, target_face : Face, temp_vision_frame : VisionFrame) -> VisionFrame:
+def get_reference_frame(source_face : Face, target_face : Face, temp_vision_frame : VisionFrame, **kwargs) -> VisionFrame:
 	pass
 
 
-def process_frame(inputs : FrameEnhancerInputs) -> VisionFrame:
+def process_frame(inputs : FrameEnhancerInputs, **kwargs) -> VisionFrame:
 	target_vision_frame = inputs.get('target_vision_frame')
-	return enhance_frame(target_vision_frame)
+	return enhance_frame(target_vision_frame, **kwargs)
 
 
-def process_frames(source_paths : List[str], queue_payloads : List[QueuePayload], update_progress : UpdateProcess) -> None:
+def process_frames(
+	source_paths : List[str],
+	queue_payloads : List[QueuePayload],
+	update_progress : UpdateProcess,
+	**kwargs
+) -> None:
 	for queue_payload in process_manager.manage(queue_payloads):
 		target_vision_path = queue_payload['frame_path']
 		target_vision_frame = read_image(target_vision_path)
 		output_vision_frame = process_frame(
 		{
 			'target_vision_frame': target_vision_frame
-		})
+		},
+			**kwargs
+		)
 		write_image(target_vision_path, output_vision_frame)
 		update_progress()
 
 
-def process_image(source_paths : List[str], target_path : str, output_path : str) -> None:
+def process_image(source_paths : List[str], target_path : str, output_path : str, **kwargs) -> None:
 	target_vision_frame = read_static_image(target_path)
 	output_vision_frame = process_frame(
 	{
 		'target_vision_frame': target_vision_frame
-	})
+	}, **kwargs
+	)
 	write_image(output_path, output_vision_frame)
 
 
-def process_image_object(source_frames: List[VisionFrame], target_vision_frame: VisionFrame) -> VisionFrame:
+def process_image_object(source_frames: List[VisionFrame], target_vision_frame: VisionFrame, **kwargs) -> VisionFrame:
 	# reference_faces = get_reference_faces() if 'reference' in facefusion.globals.face_selector_mode else None
 	# source_frames = read_static_images(source_paths)
 	# source_face = get_average_face(source_frames)
@@ -229,9 +237,10 @@ def process_image_object(source_frames: List[VisionFrame], target_vision_frame: 
 	output_vision_frame = process_frame(
 		{
 			'target_vision_frame': target_vision_frame
-		})
+		}, **kwargs
+	)
 	return output_vision_frame
 
 
-def process_video(source_paths : List[str], temp_frame_paths : List[str]) -> None:
-	frame_processors.multi_process_frames(None, temp_frame_paths, process_frames)
+def process_video(source_paths : List[str], temp_frame_paths : List[str], **kwargs) -> None:
+	frame_processors.multi_process_frames(None, temp_frame_paths, process_frames, **kwargs)

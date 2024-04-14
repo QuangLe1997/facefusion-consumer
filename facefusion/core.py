@@ -15,37 +15,37 @@ import facefusion.choices
 import facefusion.globals
 from facefusion.face_analyser import get_one_face, get_average_face
 from facefusion.face_store import get_reference_faces, append_reference_face
-from facefusion import face_analyser, face_masker, content_analyser, config, process_manager, metadata, logger, wording
+from facefusion import face_analyser, face_masker, content_analyser, config, process_manager, logger, wording
 from facefusion.content_analyser import analyse_image, analyse_video
 from facefusion.processors.frame.core import get_frame_processors_modules, load_frame_processor_module
 from facefusion.common_helper import create_metavar, get_first
 from facefusion.execution import encode_execution_providers, decode_execution_providers
 from facefusion.normalizer import normalize_output_path, normalize_padding, normalize_fps
 from facefusion.memory import limit_system_memory
-from facefusion.statistics import conditional_log_statistics
+from facefusion.statistics import conditional_log_statistics, statistics
 from facefusion.filesystem import list_directory, get_temp_frame_paths, create_temp, move_temp, clear_temp, is_image, \
 	is_video, filter_audio_paths
 from facefusion.ffmpeg import extract_frames, merge_video, copy_image, finalize_image, restore_audio, replace_audio
 from facefusion.vision import read_image, read_static_images, detect_image_resolution, restrict_video_fps, \
-	create_image_resolutions, get_video_frame, detect_video_resolution, detect_video_fps, restrict_video_resolution, \
-	restrict_image_resolution, create_video_resolutions, pack_resolution, unpack_resolution, read_static_image
+	get_video_frame, detect_video_resolution, pack_resolution, read_static_image, \
+	write_image
 
 onnxruntime.set_default_logger_severity(3)
 warnings.filterwarnings('ignore', category=UserWarning, module='gradio')
 
 
-def cli() -> None:
+def cli(source_paths, target_path, config_params: dict) -> (dict, str):
 	signal.signal(signal.SIGINT, lambda signal_number, frame: destroy())
 	program = ArgumentParser(formatter_class=lambda prog: HelpFormatter(prog, max_help_position=130), add_help=False)
 	# general
-	program.add_argument('-s', '--source', help=wording.get('help.source'), action='append', dest='source_paths',
-						 default=config.get_str_list('general.source_paths'))
-	program.add_argument('-t', '--target', help=wording.get('help.target'), dest='target_path',
-						 default=config.get_str_value('general.target_path'))
+	# program.add_argument('-s', '--source', help=wording.get('help.source'), action='append', dest='source_paths',
+	# 					 default=config.get_str_list('general.source_paths'))
+	# program.add_argument('-t', '--target', help=wording.get('help.target'), dest='target_path',
+	# 					 default=config.get_str_value('general.target_path'))
 	program.add_argument('-o', '--output', help=wording.get('help.output'), dest='output_path',
 						 default=config.get_str_value('general.output_path'))
-	program.add_argument('-v', '--version', version=metadata.get('name') + ' ' + metadata.get('version'),
-						 action='version')
+	# program.add_argument('-v', '--version', version=metadata.get('name') + ' ' + metadata.get('version'),
+	# 					 action='version')
 	# misc
 	group_misc = program.add_argument_group('misc')
 	group_misc.add_argument('--skip-download', help=wording.get('help.skip_download'), action='store_true',
@@ -168,7 +168,8 @@ def cli() -> None:
 									   metavar=create_metavar(facefusion.choices.output_video_quality_range))
 	group_output_creation.add_argument('--output-video-resolution', help=wording.get('help.output_video_resolution'),
 									   default=config.get_str_value('output_creation.output_video_resolution'))
-	group_output_creation.add_argument('--output-video-fps', help=wording.get('help.output_video_fps'), type=float)
+	group_output_creation.add_argument('--output-video-fps', help=wording.get('help.output_video_fps'),
+									   default=config.get_float_value('output_creation.output_video_fps'), type=float)
 	group_output_creation.add_argument('--skip-audio', help=wording.get('help.skip_audio'), action='store_true',
 									   default=config.get_bool_value('output_creation.skip_audio'))
 	# frame processors
@@ -181,21 +182,17 @@ def cli() -> None:
 	for frame_processor in available_frame_processors:
 		frame_processor_module = load_frame_processor_module(frame_processor)
 		frame_processor_module.register_args(group_frame_processors)
-	# uis
-	available_ui_layouts = list_directory('facefusion/uis/layouts')
-	group_uis = program.add_argument_group('uis')
-	group_uis.add_argument('--ui-layouts',
-						   help=wording.get('help.ui_layouts').format(choices=', '.join(available_ui_layouts)),
-						   default=config.get_str_list('uis.ui_layouts', 'default'), nargs='+')
 	# run(program)
-	main(program)
+	if not config_params:
+		config_params = {}
+	return main(program, source_paths=source_paths, target_path=target_path, **config_params)
 
 
 def apply_args(program: ArgumentParser) -> None:
 	args = program.parse_args()
 	# general
-	facefusion.globals.source_paths = args.source_paths
-	facefusion.globals.target_path = args.target_path
+	# facefusion.globals.source_paths = args.source_paths
+	# facefusion.globals.target_path = args.target_path
 	facefusion.globals.output_path = args.output_path
 	# misc
 	facefusion.globals.skip_download = args.skip_download
@@ -236,25 +233,25 @@ def apply_args(program: ArgumentParser) -> None:
 	facefusion.globals.keep_temp = args.keep_temp
 	# output creation
 	facefusion.globals.output_image_quality = args.output_image_quality
-	if is_image(args.target_path):
-		output_image_resolution = detect_image_resolution(args.target_path)
-		output_image_resolutions = create_image_resolutions(output_image_resolution)
-		if args.output_image_resolution in output_image_resolutions:
-			facefusion.globals.output_image_resolution = args.output_image_resolution
-		else:
-			facefusion.globals.output_image_resolution = pack_resolution(output_image_resolution)
+	# if is_image(args.target_path):
+	# 	output_image_resolution = detect_image_resolution(args.target_path)
+	# 	output_image_resolutions = create_image_resolutions(output_image_resolution)
+	# 	if args.output_image_resolution in output_image_resolutions:
+	# 		facefusion.globals.output_image_resolution = args.output_image_resolution
+	# 	else:
+	# 		facefusion.globals.output_image_resolution = pack_resolution(output_image_resolution)
 	facefusion.globals.output_video_encoder = args.output_video_encoder
 	facefusion.globals.output_video_preset = args.output_video_preset
 	facefusion.globals.output_video_quality = args.output_video_quality
-	if is_video(args.target_path):
-		output_video_resolution = detect_video_resolution(args.target_path)
-		output_video_resolutions = create_video_resolutions(output_video_resolution)
-		if args.output_video_resolution in output_video_resolutions:
-			facefusion.globals.output_video_resolution = args.output_video_resolution
-		else:
-			facefusion.globals.output_video_resolution = pack_resolution(output_video_resolution)
-	if args.output_video_fps or is_video(args.target_path):
-		facefusion.globals.output_video_fps = normalize_fps(args.output_video_fps) or detect_video_fps(args.target_path)
+	# if is_video(args.target_path):
+	# 	output_video_resolution = detect_video_resolution(args.target_path)
+	# 	output_video_resolutions = create_video_resolutions(output_video_resolution)
+	# 	if args.output_video_resolution in output_video_resolutions:
+	# 		facefusion.globals.output_video_resolution = args.output_video_resolution
+	# 	else:
+	# 		facefusion.globals.output_video_resolution = pack_resolution(output_video_resolution)
+	# if args.output_video_fps or is_video(args.target_path):
+	facefusion.globals.output_video_fps = normalize_fps(args.output_video_fps)
 	facefusion.globals.skip_audio = args.skip_audio
 	# frame processors
 	available_frame_processors = list_directory('facefusion/processors/frame/modules')
@@ -263,50 +260,38 @@ def apply_args(program: ArgumentParser) -> None:
 		frame_processor_module = load_frame_processor_module(frame_processor)
 		frame_processor_module.apply_args(program)
 	# uis
-	facefusion.globals.ui_layouts = args.ui_layouts
+	# facefusion.globals.ui_layouts = args.ui_layouts
 
 
-def run(program: ArgumentParser) -> None:
+def main(program: ArgumentParser, source_paths, target_path, **kwargs) -> (dict, str):
 	apply_args(program)
 	logger.init(facefusion.globals.log_level)
 	if facefusion.globals.system_memory_limit > 0:
 		limit_system_memory(facefusion.globals.system_memory_limit)
-	if not pre_check() or not content_analyser.pre_check() or not face_analyser.pre_check() or not face_masker.pre_check():
-		return
-	for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
-		if not frame_processor_module.pre_check():
-			return
-	if facefusion.globals.headless:
-		conditional_process()
-	else:
-		import facefusion.uis.core as ui
-
-		for ui_layout in ui.get_ui_layouts_modules(facefusion.globals.ui_layouts):
-			if not ui_layout.pre_check():
-				return
-		ui.launch()
+	return main_process(source_paths, target_path, **kwargs)
 
 
-def main(program: ArgumentParser) -> None:
-	apply_args(program)
-	logger.init(facefusion.globals.log_level)
-	if facefusion.globals.system_memory_limit > 0:
-		limit_system_memory(facefusion.globals.system_memory_limit)
-	main_process()
-
-
-def main_process(source_paths, target_path) -> None:
+def main_process(source_paths: list[str], target_path: str, **kwargs) -> (dict, str):
 	start_time = time()
 	if is_image(target_path):
-		process_image(
+		return process_image(
 			source_paths=source_paths,
 			target_path=target_path,
+			output_path=facefusion.globals.output_path or '.',
 			start_time=start_time,
 			is_check_nsfw=False,
-			is_cache=True
+			is_cache=True,
+			**kwargs
 		)
 	if is_video(target_path):
-		process_video(start_time, is_check_nsfw=False)
+		return process_video(
+			source_paths=source_paths,
+			target_path=target_path,
+			output_path=facefusion.globals.output_path or '.',
+			start_time=start_time,
+			is_check_nsfw=False,
+			**kwargs
+		)
 
 
 def destroy() -> None:
@@ -328,7 +313,7 @@ def pre_check() -> bool:
 	return True
 
 
-def conditional_process() -> None:
+def conditional_process(**kwargs) -> None:
 	start_time = time()
 	for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
 		while not frame_processor_module.post_check():
@@ -337,49 +322,63 @@ def conditional_process() -> None:
 		logger.enable()
 		if not frame_processor_module.pre_process('output'):
 			return
-	conditional_append_reference_faces()
+	conditional_append_reference_faces(**kwargs)
 	if is_image(facefusion.globals.target_path):
 		process_image(start_time)
 	if is_video(facefusion.globals.target_path):
 		process_video(start_time)
 
 
-def conditional_append_reference_faces() -> None:
-	if 'reference' in facefusion.globals.face_selector_mode and not get_reference_faces():
+def conditional_append_reference_faces(**kwargs) -> None:
+	if 'reference' in kwargs.get('face_selector_mode',
+								 facefusion.globals.face_selector_mode) and not get_reference_faces():
 		source_frames = read_static_images(facefusion.globals.source_paths)
-		source_face = get_average_face(source_frames)
+		source_face = get_average_face(source_frames, **kwargs)
 		if is_video(facefusion.globals.target_path):
 			reference_frame = get_video_frame(facefusion.globals.target_path, facefusion.globals.reference_frame_number)
 		else:
 			reference_frame = read_image(facefusion.globals.target_path)
-		reference_face = get_one_face(reference_frame, facefusion.globals.reference_face_position)
+		reference_face = get_one_face(reference_frame, facefusion.globals.reference_face_position, **kwargs)
 		append_reference_face('origin', reference_face)
 		if source_face and reference_face:
 			for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
-				abstract_reference_frame = frame_processor_module.get_reference_frame(source_face, reference_face,
-																					  reference_frame)
+				abstract_reference_frame = frame_processor_module.get_reference_frame(
+					source_face,
+					reference_face,
+					reference_frame,
+					**kwargs
+				)
 				if numpy.any(abstract_reference_frame):
 					reference_frame = abstract_reference_frame
-					reference_face = get_one_face(reference_frame, facefusion.globals.reference_face_position)
+					reference_face = get_one_face(
+						reference_frame,
+						kwargs.get(
+							'reference_face_position',
+							facefusion.globals.reference_face_position
+						),
+						**kwargs
+					)
 					append_reference_face(frame_processor_module.__name__, reference_face)
 
 
 def process_image(
-	source_paths: str,
+	source_paths: list[str],
 	target_path: str,
 	start_time: float,
 	is_check_nsfw: bool = False,
 	is_cache=True,
-	output_path:str = '.',
-) -> None:
+	output_path: str = '.',
+	**kwargs
+) -> (dict, str):
 	normed_output_path = normalize_output_path(target_path, output_path)
 	if is_check_nsfw and analyse_image(target_path):
 		return
 	# copy image
 	process_manager.start()
-	temp_image_resolution = pack_resolution(restrict_image_resolution(target_path, unpack_resolution(
-		facefusion.globals.output_image_resolution)))
-	logger.info(wording.get('copying_image').format(resolution=temp_image_resolution), __name__.upper())
+	temp_image_resolution = pack_resolution(detect_image_resolution(target_path))
+	logger.info(wording.get('copying_image').format(
+		resolution=temp_image_resolution), __name__.upper()
+	)
 	if copy_image(target_path, normed_output_path, temp_image_resolution):
 		logger.debug(wording.get('copying_image_succeed'), __name__.upper())
 	else:
@@ -390,15 +389,19 @@ def process_image(
 	target_frame = read_static_image(normed_output_path)
 	for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
 		logger.info(wording.get('processing'), frame_processor_module.NAME)
-		target_frame = frame_processor_module.process_image_object(source_frames, target_frame)
+		target_frame = frame_processor_module.process_image_object(source_frames, target_frame, **kwargs)
 		if not is_cache:
 			frame_processor_module.post_process()
+	if target_frame is not None:
+		write_image(normed_output_path, target_frame)
 	if is_process_stopping():
 		return
 	# finalize image
-	logger.info(wording.get('finalizing_image').format(resolution=facefusion.globals.output_image_resolution),
-				__name__.upper())
-	if finalize_image(normed_output_path, facefusion.globals.output_image_resolution):
+	logger.info(wording.get('finalizing_image').format(
+		resolution=temp_image_resolution),
+		__name__.upper()
+	)
+	if finalize_image(normed_output_path, temp_image_resolution, **kwargs):
 		logger.debug(wording.get('finalizing_image_succeed'), __name__.upper())
 	else:
 		logger.warn(wording.get('finalizing_image_skipped'), __name__.upper())
@@ -406,33 +409,45 @@ def process_image(
 	if is_image(normed_output_path):
 		seconds = '{:.2f}'.format((time() - start_time) % 60)
 		logger.info(wording.get('processing_image_succeed').format(seconds=seconds), __name__.upper())
-		conditional_log_statistics()
+		statistic_data = statistics()
+	# conditional_log_statistics()
 	else:
 		logger.error(wording.get('processing_image_failed'), __name__.upper())
+		statistic_data = {}
+		normed_output_path = None
 	process_manager.end()
+	return statistic_data, normed_output_path
 
 
-def process_video(start_time: float, is_check_nsfw=False) -> None:
-	normed_output_path = normalize_output_path(facefusion.globals.target_path, facefusion.globals.output_path)
+def process_video(
+	source_paths: list[str],
+	target_path: str,
+	start_time: float,
+	is_check_nsfw: bool = False,
+	output_path: str = '.',
+	**kwargs
+) -> (dict, str):
+	normed_output_path = normalize_output_path(target_path, output_path)
 	if is_check_nsfw and analyse_video(
-		facefusion.globals.target_path, facefusion.globals.trim_frame_start,
+		target_path, facefusion.globals.trim_frame_start,
 		facefusion.globals.trim_frame_end
 	):
 		return
 	# clear temp
 	logger.debug(wording.get('clearing_temp'), __name__.upper())
-	clear_temp(facefusion.globals.target_path)
+	clear_temp(target_path)
 	# create temp
 	logger.debug(wording.get('creating_temp'), __name__.upper())
-	create_temp(facefusion.globals.target_path)
+	create_temp(target_path)
 	# extract frames
 	process_manager.start()
-	temp_video_resolution = pack_resolution(restrict_video_resolution(facefusion.globals.target_path, unpack_resolution(
-		facefusion.globals.output_video_resolution)))
-	temp_video_fps = restrict_video_fps(facefusion.globals.target_path, facefusion.globals.output_video_fps)
-	logger.info(wording.get('extracting_frames').format(resolution=temp_video_resolution, fps=temp_video_fps),
-				__name__.upper())
-	if extract_frames(facefusion.globals.target_path, temp_video_resolution, temp_video_fps):
+	temp_video_resolution = pack_resolution(detect_video_resolution(target_path))
+	temp_video_fps = restrict_video_fps(target_path, facefusion.globals.output_video_fps)
+	logger.info(
+		wording.get('extracting_frames').format(resolution=temp_video_resolution, fps=temp_video_fps),
+		__name__.upper()
+	)
+	if extract_frames(target_path, temp_video_resolution, temp_video_fps):
 		logger.debug(wording.get('extracting_frames_succeed'), __name__.upper())
 	else:
 		if is_process_stopping():
@@ -440,11 +455,11 @@ def process_video(start_time: float, is_check_nsfw=False) -> None:
 		logger.error(wording.get('extracting_frames_failed'), __name__.upper())
 		return
 	# process frames
-	temp_frame_paths = get_temp_frame_paths(facefusion.globals.target_path)
+	temp_frame_paths = get_temp_frame_paths(target_path)
 	if temp_frame_paths:
 		for frame_processor_module in get_frame_processors_modules(facefusion.globals.frame_processors):
 			logger.info(wording.get('processing'), frame_processor_module.NAME)
-			frame_processor_module.process_video(facefusion.globals.source_paths, temp_frame_paths)
+			frame_processor_module.process_video(source_paths, temp_frame_paths, **kwargs)
 			frame_processor_module.post_process()
 		if is_process_stopping():
 			return
@@ -452,10 +467,12 @@ def process_video(start_time: float, is_check_nsfw=False) -> None:
 		logger.error(wording.get('temp_frames_not_found'), __name__.upper())
 		return
 	# merge video
-	logger.info(wording.get('merging_video').format(resolution=facefusion.globals.output_video_resolution,
-													fps=facefusion.globals.output_video_fps), __name__.upper())
-	if merge_video(facefusion.globals.target_path, facefusion.globals.output_video_resolution,
-				   facefusion.globals.output_video_fps):
+	logger.info(wording.get('merging_video').format(resolution=temp_video_resolution,
+													fps=facefusion.globals.output_video_fps or temp_video_fps),
+				__name__.upper())
+	if merge_video(
+		target_path, temp_video_resolution,
+		facefusion.globals.output_video_fps or temp_video_fps):
 		logger.debug(wording.get('merging_video_succeed'), __name__.upper())
 	else:
 		if is_process_stopping():
@@ -463,39 +480,45 @@ def process_video(start_time: float, is_check_nsfw=False) -> None:
 		logger.error(wording.get('merging_video_failed'), __name__.upper())
 		return
 	# handle audio
-	if facefusion.globals.skip_audio:
+	if kwargs.get('skip_audio', facefusion.globals.skip_audio):
 		logger.info(wording.get('skipping_audio'), __name__.upper())
-		move_temp(facefusion.globals.target_path, normed_output_path)
+		move_temp(target_path, normed_output_path)
 	else:
 		if 'lip_syncer' in facefusion.globals.frame_processors:
-			source_audio_path = get_first(filter_audio_paths(facefusion.globals.source_paths))
-			if source_audio_path and replace_audio(facefusion.globals.target_path, source_audio_path,
-												   normed_output_path):
+			source_audio_path = get_first(filter_audio_paths(source_paths))
+			if source_audio_path and replace_audio(
+				target_path, source_audio_path,
+				normed_output_path
+			):
 				logger.debug(wording.get('restoring_audio_succeed'), __name__.upper())
 			else:
 				if is_process_stopping():
 					return
 				logger.warn(wording.get('restoring_audio_skipped'), __name__.upper())
-				move_temp(facefusion.globals.target_path, normed_output_path)
+				move_temp(target_path, normed_output_path)
 		else:
-			if restore_audio(facefusion.globals.target_path, normed_output_path, facefusion.globals.output_video_fps):
+			if restore_audio(target_path, normed_output_path, facefusion.globals.output_video_fps or temp_video_fps):
 				logger.debug(wording.get('restoring_audio_succeed'), __name__.upper())
 			else:
 				if is_process_stopping():
 					return
 				logger.warn(wording.get('restoring_audio_skipped'), __name__.upper())
-				move_temp(facefusion.globals.target_path, normed_output_path)
+				move_temp(target_path, normed_output_path)
 	# clear temp
 	logger.debug(wording.get('clearing_temp'), __name__.upper())
-	clear_temp(facefusion.globals.target_path)
+	clear_temp(target_path)
 	# validate video
 	if is_video(normed_output_path):
 		seconds = '{:.2f}'.format((time() - start_time))
 		logger.info(wording.get('processing_video_succeed').format(seconds=seconds), __name__.upper())
 		conditional_log_statistics()
+		statistic_data = statistics()
 	else:
 		logger.error(wording.get('processing_video_failed'), __name__.upper())
+		statistic_data = {}
+		normed_output_path = None
 	process_manager.end()
+	return statistic_data, normed_output_path
 
 
 def is_process_stopping() -> bool:
@@ -503,7 +526,3 @@ def is_process_stopping() -> bool:
 		process_manager.end()
 		logger.info(wording.get('processing_stopped'), __name__.upper())
 	return process_manager.is_pending()
-
-
-if __name__ == '__main__':
-	cli()
