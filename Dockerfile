@@ -12,4 +12,4 @@ RUN apt-get install git -y
 RUN apt-get install curl -y
 RUN apt-get install ffmpeg -y
 
-RUN python install.py --onnxruntime cuda-11.8 --skip-conda
+RUN python install.py --onnxruntime default --skip-conda
