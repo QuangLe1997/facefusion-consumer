@@ -16,7 +16,7 @@ from utils.file import download_image, BotTeleGram, upload_file_to_minio
 
 # Kafka Consumer to receive messages from the queue
 consumer = Consumer({
-	'bootstrap.servers': os.getenv("KAFKA_BROKERS").split(','),
+	'bootstrap.servers': os.getenv("KAFKA_BROKERS"),
 	'group.id': os.getenv("KAFKA_GROUP_ID"),
 	'auto.offset.reset': 'earliest'}
 )
