@@ -266,13 +266,13 @@ def main(source_paths, target_path, **kwargs) -> (dict, str):
 	return main_process(source_paths, target_path, **kwargs)
 
 
-def main_process(source_paths: list[str], target_path: str, **kwargs) -> (dict, str):
+def main_process(source_paths: list[str], target_path: str,output_path:str, **kwargs) -> (dict, str):
 	start_time = time()
 	if is_image(target_path):
 		return process_image(
 			source_paths=source_paths,
 			target_path=target_path,
-			output_path=facefusion.globals.output_path or '.',
+			output_path=output_path or '.',
 			start_time=start_time,
 			is_check_nsfw=False,
 			is_cache=True,
@@ -282,7 +282,7 @@ def main_process(source_paths: list[str], target_path: str, **kwargs) -> (dict, 
 		return process_video(
 			source_paths=source_paths,
 			target_path=target_path,
-			output_path=facefusion.globals.output_path or '.',
+			output_path=output_path or '.',
 			start_time=start_time,
 			is_check_nsfw=False,
 			**kwargs
