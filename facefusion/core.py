@@ -34,7 +34,7 @@ onnxruntime.set_default_logger_severity(3)
 warnings.filterwarnings('ignore', category=UserWarning, module='gradio')
 
 
-def cli(source_paths, target_path, config_params: dict) -> (dict, str):
+def setup_variable() -> None:
 	signal.signal(signal.SIGINT, lambda signal_number, frame: destroy())
 	program = ArgumentParser(formatter_class=lambda prog: HelpFormatter(prog, max_help_position=130), add_help=False)
 	# general
@@ -182,10 +182,9 @@ def cli(source_paths, target_path, config_params: dict) -> (dict, str):
 	for frame_processor in available_frame_processors:
 		frame_processor_module = load_frame_processor_module(frame_processor)
 		frame_processor_module.register_args(group_frame_processors)
-	# run(program)
-	if not config_params:
-		config_params = {}
-	return main(program, source_paths=source_paths, target_path=target_path, **config_params)
+
+	apply_args(program)
+	logger.init(facefusion.globals.log_level)
 
 
 def apply_args(program: ArgumentParser) -> None:
@@ -259,13 +258,9 @@ def apply_args(program: ArgumentParser) -> None:
 	for frame_processor in available_frame_processors:
 		frame_processor_module = load_frame_processor_module(frame_processor)
 		frame_processor_module.apply_args(program)
-	# uis
-	# facefusion.globals.ui_layouts = args.ui_layouts
 
 
-def main(program: ArgumentParser, source_paths, target_path, **kwargs) -> (dict, str):
-	apply_args(program)
-	logger.init(facefusion.globals.log_level)
+def main(source_paths, target_path, **kwargs) -> (dict, str):
 	if facefusion.globals.system_memory_limit > 0:
 		limit_system_memory(facefusion.globals.system_memory_limit)
 	return main_process(source_paths, target_path, **kwargs)

@@ -3,9 +3,11 @@
 from facefusion import core
 
 if __name__ == '__main__':
-	output = core.cli(
+	core.setup_variable()
+	output = core.main_process(
 			source_paths=['input/quangle.jpg'],
-			target_path='input/video.mp4',
-			config_params={}
+			target_path='input/quangle2.jpg',
+			config_params={
+				'face_selector_mode': 'many'
+			}
 	)
-	print(output)

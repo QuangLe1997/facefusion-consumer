@@ -1,5 +1,4 @@
 filetype==1.2.0
-gradio==3.50.2
 numpy==1.26.4
 onnx==1.15.0
 onnxruntime==1.16.3
